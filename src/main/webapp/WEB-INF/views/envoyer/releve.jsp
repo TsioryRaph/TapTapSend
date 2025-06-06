@@ -1,66 +1,63 @@
-<div class="card">
-    <div class="card-header">
-        <h5>Relevé d'opérations</h5>
+<%@ page contentType="text/html;charset=UTF-8" language="java" %>
+<%@ taglib prefix="c" uri="jakarta.tags.core" %>
+<%@ taglib prefix="fmt" uri="jakarta.tags.fmt" %>
+
+<fmt:setLocale value="fr_FR" scope="session"/>
+
+<%-- ATTENTION: Ce fichier ne doit contenir AUCUN tag <script> ou code JavaScript.
+     Le JavaScript pour la modale et la soumission est dans template.jsp.
+     Le div avec l'ID "modalForm" DOIT ÊTRE SUPPRIMÉ ici. --%>
+
+<%-- Le contenu qui sera inséré directement dans <div id="modalBody"> --%>
+<p>Sélectionnez les critères pour générer le relevé (PDF).</p>
+
+<form id="pdfForm" action="${pageContext.request.contextPath}/envoyer" method="get">
+    <div class="mb-3">
+        <label for="numtelReleve" class="form-label">Client</label> <%-- Changé le label pour "Client" --%>
+        <%-- L'input text est remplacé par un select pour une meilleure UX --%>
+        <select class="form-select" id="numtelReleve" name="numtel" required>
+            <option value="">Sélectionner un client</option>
+            <c:forEach items="${clients}" var="client">
+                <option value="${client.numtel}">${client.nom} (${client.numtel})</option>
+            </c:forEach>
+        </select>
     </div>
-    <div class="card-body">
-        <div class="mb-4">
-            <h4>Date :
-                <fmt:formatDate value="${java.time.YearMonth.of(year, month).atDay(1)}" pattern="MMMM yyyy"/>
-            </h4>
-            <p>Contact : ${client.numtel}</p>
-            <p>${client.nom}</p>
-            <p>${client.sexe}</p>
-        </div>
 
-        <div class="mb-4">
-            <h5>Solde actuel :
-                <fmt:formatNumber value="${client.solde}" type="currency" currencyCode="EUR"/>
-            </h5>
-        </div>
-
-        <div class="table-responsive mb-4">
-            <table class="table table-striped">
-                <thead>
-                    <tr>
-                        <th>Date</th>
-                        <th>Raison</th>
-                        <th>Nom du récepteur</th>
-                        <th>Montant</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <c:forEach items="${envois}" var="envoi">
-                        <tr>
-                            <td>
-                                <fmt:formatDate value="${envoi.date}" pattern="dd/MM/yyyy"/>
-                            </td>
-                            <td>${envoi.raison}</td>
-                            <td>${envoi.recepteur.nom}</td>
-                            <td>
-                                <fmt:formatNumber value="${envoi.montant}" type="currency" currencyCode="EUR"/>
-                            </td>
-                        </tr>
-                    </c:forEach>
-                </tbody>
-            </table>
-        </div>
-
-        <div class="text-end">
-            <h5>Total Débit :
-                <fmt:formatNumber
-                    value="${envois.stream().map(e -> e.montant).reduce(0, Integer::sum)}"
-                    type="currency" currencyCode="EUR"/>
-            </h5>
-        </div>
-
-        <div class="d-flex justify-content-between mt-4">
-            <a href="${pageContext.request.contextPath}/envoyer" class="btn btn-secondary">
-                <i class="fas fa-arrow-left me-1"></i> Retour
-            </a>
-            <a href="${pageContext.request.contextPath}/envoyer?action=pdf&numtel=${client.numtel}&month=${month}&year=${year}"
-               class="btn btn-primary">
-                <i class="fas fa-file-pdf me-1"></i> Générer PDF
-            </a>
-        </div>
+    <div class="mb-3">
+        <label for="monthReleve" class="form-label">Mois</label>
+        <select class="form-select" id="monthReleve" name="month" required>
+            <option value="">Sélectionner un mois</option>
+            <option value="1">Janvier</option>
+            <option value="2">Février</option>
+            <option value="3">Mars</option>
+            <option value="4">Avril</option>
+            <option value="5">Mai</option>
+            <option value="6">Juin</option>
+            <option value="7">Juillet</option>
+            <option value="8">Août</option>
+            <option value="9">Septembre</option>
+            <option value="10">Octobre</option>
+            <option value="11">Novembre</option>
+            <option value="12">Décembre</option>
+        </select>
     </div>
-</div>
+
+    <div class="mb-3">
+        <label for="yearReleve" class="form-label">Année</label>
+        <input type="number" class="form-control" id="yearReleve" name="year" required
+               min="2000" max="${java.time.LocalDate.now().getYear()}" value="${java.time.LocalDate.now().getYear()}">
+    </div>
+
+    <%-- Input caché pour l'action PDF, nécessaire pour le servlet --%>
+    <input type="hidden" name="action" value="pdf">
+
+    <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+
+        <%-- Bouton pour générer directement le PDF --%>
+        <%-- formtarget="_blank" est important pour ouvrir le PDF dans un nouvel onglet --%>
+        <button type="submit" class="btn btn-primary" formtarget="_blank">
+            <i class="fas fa-file-pdf me-1"></i> Générer PDF
+        </button>
+    </div>
+</form>

@@ -9,6 +9,8 @@
     <title>TapTapSend - ${pageTitle}</title>
 
     <link href="${pageContext.request.contextPath}/assets/css/bootstrap.min.css" rel="stylesheet">
+    <%-- Vous pouvez également utiliser Bootswatch Solar via un CDN pour un thème complet --%>
+    <%-- <link href="https://cdn.jsdelivr.net/npm/bootswatch@5.3.3/dist/solar/bootstrap.min.css" rel="stylesheet"> --%>
 
     <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.2/css/all.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
@@ -19,10 +21,7 @@
         .sidebar {
             min-height: 100vh;
             /* Adaptez la couleur de la sidebar au thème Solar */
-            /* Utilisez une variable CSS de Bootswatch Solar pour une meilleure intégration */
             background-color: var(--bs-gray-dark); /* Couleur gris foncé de Solar : #073642 */
-            /* Ou si vous préférez une couleur d'accent du thème, par exemple : */
-            /* background-color: var(--bs-blue); */ /* Pour le bleu/doré du thème Solar : #b58900 */
         }
         .sidebar .nav-link {
             color: rgba(255, 255, 255, 0.75);
@@ -32,7 +31,6 @@
         }
         .sidebar .nav-link.active {
             color: white;
-            /* Ajustez la couleur de fond pour l'élément actif */
             background-color: rgba(181, 137, 0, 0.2); /* Un doré/bleu plus transparent de Solar */
         }
     </style>
@@ -83,6 +81,7 @@
                     </div>
                 </div>
 
+                <%-- C'est ici que le contenu spécifique de la page sera inclus --%>
                 <jsp:include page="${contentPage}" />
             </div>
         </div>
@@ -92,7 +91,7 @@
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">${modalTitle}</h5>
+                    <h5 class="modal-title" id="formModalLabel"></h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body" id="modalBody">
@@ -107,48 +106,72 @@
 
     <script>
         $(document).ready(function() {
-            // Toast notifications
+            // Fonction utilitaire pour afficher les messages Toastify
+            function showToast(message, type) {
+                let backgroundColor = "";
+                if (type === "success") {
+                    backgroundColor = "#28a745"; // Vert
+                } else if (type === "error") {
+                    backgroundColor = "#dc3545"; // Rouge
+                } else {
+                    backgroundColor = "#17a2b8"; // Bleu (pour info/défaut)
+                }
+
+                Toastify({
+                    text: message,
+                    duration: 3000,
+                    close: true,
+                    gravity: "top",
+                    position: "right",
+                    backgroundColor: backgroundColor,
+                }).showToast();
+            }
+
+            // Notifications Toastify pour les messages passés via URL (pour les redirections initiales)
             const urlParams = new URLSearchParams(window.location.search);
             const success = urlParams.get('success');
             const error = urlParams.get('error');
 
             if (success) {
-                Toastify({
-                    text: success,
-                    duration: 3000,
-                    close: true,
-                    gravity: "top",
-                    position: "right",
-                    backgroundColor: "#28a745",
-                }).showToast();
+                showToast(decodeURIComponent(success.replace(/\+/g, ' ')), "success");
+                // Nettoyer l'URL après affichage du toast pour éviter de le réafficher au rechargement
+                urlParams.delete('success');
+                window.history.replaceState({}, document.title, "?" + urlParams.toString());
             }
 
             if (error) {
-                Toastify({
-                    text: error,
-                    duration: 3000,
-                    close: true,
-                    gravity: "top",
-                    position: "right",
-                    backgroundColor: "#dc3545",
-                }).showToast();
+                showToast(decodeURIComponent(error.replace(/\+/g, ' ')), "error");
+                // Nettoyer l'URL après affichage du toast
+                urlParams.delete('error');
+                window.history.replaceState({}, document.title, "?" + urlParams.toString());
             }
 
-            // Handle modal forms
-            $('.btn-edit, .btn-add').click(function(e) {
+            // Gérer l'ouverture des modales (Ajout, Édition, PDF)
+            $(document).on('click', '.btn-add, .btn-edit, .btn-pdf-modal-open', function(e) {
                 e.preventDefault();
                 const url = $(this).attr('href');
-                const modal = $('#formModal');
+                const modalTitle = $(this).data('modal-title');
 
-                $.get(url, function(data) {
-                    $('#modalBody').html(data);
-                    modal.modal('show');
+                $('#formModalLabel').text(modalTitle);
+
+                $.ajax({
+                    url: url,
+                    type: 'GET',
+                    success: function(data) {
+                        $('#modalBody').html(data);
+                        $('#formModal').modal('show');
+                    },
+                    error: function(xhr) {
+                        console.error("Erreur lors du chargement du formulaire:", xhr.responseText);
+                        $('#modalBody').html('<div class="alert alert-danger">Erreur lors du chargement du formulaire : ' + (xhr.responseText || "Requête échouée") + '</div>');
+                        $('#formModal').modal('show');
+                    }
                 });
             });
 
-            // Handle form submission
-            $(document).on('submit', '#modalForm', function(e) {
-                e.preventDefault();
+            // Gérer la soumission des formulaires dans la modale via AJAX (pour ajout/modification)
+            $(document).on('submit', '#modalBody form:not(#pdfForm)', function(e) {
+                e.preventDefault(); // Empêche la soumission normale du formulaire
                 const form = $(this);
                 const url = form.attr('action');
                 const method = form.attr('method');
@@ -158,17 +181,65 @@
                     url: url,
                     type: method,
                     data: data,
-                    success: function(response) {
-                        if (response.redirect) {
-                            window.location.href = response.redirect;
+                    dataType: 'json', // Indique que nous attendons du JSON
+                    success: function(jsonResponse) {
+                        if (jsonResponse && jsonResponse.redirect) {
+                            // Cas où le serveur demande une redirection complète (si nécessaire)
+                            window.location.href = jsonResponse.redirect;
+                        } else if (jsonResponse && jsonResponse.message) {
+                            // Afficher un message de succès
+                            showToast(jsonResponse.message, "success");
+                            $('#formModal').modal('hide'); // Fermer la modale
+                            window.location.reload(); // Recharger toute la page pour rafraîchir la liste
+                        } else if (jsonResponse && jsonResponse.error) {
+                            // Afficher un message d'erreur
+                            showToast(jsonResponse.error, "error");
+                            // Ne pas fermer la modale pour laisser l'utilisateur corriger l'erreur
                         } else {
-                            $('#modalBody').html(response);
+                            // Si la réponse n'est pas un JSON structuré (peut arriver si le serveur renvoie du HTML en cas d'erreur non gérée)
+                            console.warn("Réponse non structurée (non JSON de redirection/message/erreur):", jsonResponse);
+                            $('#modalBody').html(jsonResponse); // Tente d'afficher la réponse HTML dans la modale
                         }
                     },
                     error: function(xhr) {
-                        $('#modalBody').html(xhr.responseText);
+                        console.error("Erreur de soumission du formulaire AJAX:", xhr.responseText);
+                        showToast("Erreur interne du serveur : " + (xhr.responseText || "Requête échouée"), "error");
+                        $('#modalBody').html('<div class="alert alert-danger">Erreur de soumission : ' + (xhr.responseText || "Requête échouée") + '</div>');
                     }
                 });
+            });
+
+            // Gérer la soumission des formulaires de suppression via AJAX
+            $(document).on('submit', '.delete-envoi-form', function(e) {
+                e.preventDefault(); // Empêche la soumission normale du formulaire
+                const form = $(this);
+                const url = form.attr('action');
+                const data = form.serialize();
+
+                // Confirmer la suppression avec l'utilisateur
+                if (confirm('Êtes-vous sûr de vouloir supprimer cet envoi ?')) {
+                    $.ajax({
+                        url: url,
+                        type: 'POST', // Les suppressions sont généralement des POST
+                        data: data,
+                        dataType: 'json', // Attendez une réponse JSON
+                        success: function(jsonResponse) {
+                            if (jsonResponse && jsonResponse.message) {
+                                showToast(jsonResponse.message, "success");
+                                window.location.reload(); // Recharger la page pour mettre à jour la liste
+                            } else if (jsonResponse && jsonResponse.error) {
+                                showToast(jsonResponse.error, "error");
+                            } else {
+                                console.warn("Réponse inattendue après suppression:", jsonResponse);
+                                showToast("Une erreur inconnue est survenue lors de la suppression.", "error");
+                            }
+                        },
+                        error: function(xhr) {
+                            console.error("Erreur AJAX lors de la suppression:", xhr.responseText);
+                            showToast("Erreur lors de la suppression : " + (xhr.responseText || "Requête échouée"), "error");
+                        }
+                    });
+                }
             });
         });
     </script>

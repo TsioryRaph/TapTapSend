@@ -13,7 +13,7 @@ public abstract class GenericDAO<T> {
         this.entityClass = entityClass;
     }
 
-    protected EntityManager getEntityManager() {
+    protected static EntityManager getEntityManager() {
         // Cette méthode crée une nouvelle instance d'EntityManager à chaque appel.
         // C'est typique pour les DAOs simples, mais pour des applications plus complexes,
         // la gestion de l'EntityManager (par exemple, via un gestionnaire de transactions ou CDI/Spring)

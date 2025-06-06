@@ -46,7 +46,7 @@ public class Client {
         this.mail = mail;
     }
 
-    // Getters and Setters
+    // Getters et Setters
     public String getNumtel() {
         return numtel;
     }
@@ -109,5 +109,16 @@ public class Client {
 
     public void setEnvoisRecus(List<Envoyer> envoisRecus) {
         this.envoisRecus = envoisRecus;
+    }
+
+    public String getDevise() {
+        // Logique pour déterminer la devise en fonction du pays.
+        // On suppose que "Madagascar" est le pays local pour l'Ariary (MGA),
+        // tout autre pays implique un client international utilisant l'Euro (EUR).
+        if (this.pays != null && this.pays.equalsIgnoreCase("Madagascar")) {
+            return "MGA"; // Ariary malgache
+        } else {
+            return "EUR"; // Euro pour les clients internationaux ou si le pays n'est pas spécifié
+        }
     }
 }
