@@ -1,13 +1,36 @@
 <%@ page contentType="text/html;charset=UTF-8" language="java" %>
 <%@ taglib prefix="c" uri="jakarta.tags.core" %>
 
-<%-- Le formulaire lui-même, sans <html>, <head>, <body> --%>
+<%--
+    Ce formulaire est conçu pour être inclus dans une modale ou une autre section de page.
+    Il gère à la fois l'ajout d'un nouveau client et la modification d'un client existant.
+    La présence du champ caché 'originalNumtel' et l'attribut 'readonly' sur 'numtel'
+    permettent au servlet de distinguer l'opération.
+--%>
 <form id="modalForm" method="post" action="${pageContext.request.contextPath}/clients">
+    <%--
+        Champ caché pour identifier si l'opération est une mise à jour.
+        Ce champ est présent UNIQUEMENT si un client existant est en cours de modification
+        (c-à-d, si ${client.numtel} n'est pas vide, car il est rempli par le doGet pour les clients existants).
+        Sa valeur est le numéro de téléphone original du client.
+    --%>
+    <c:if test="${client.numtel != null && client.numtel != ''}">
+        <input type="hidden" name="originalNumtel" value="${client.numtel}">
+    </c:if>
+
     <div class="mb-3">
         <label for="numtel" class="form-label">Numéro de téléphone</label>
         <input type="text" class="form-control" id="numtel" name="numtel"
-               value="${client.numtel}" ${not empty client.numtel ? 'readonly' : ''} required>
-        <%-- 'readonly' si on est en mode modification --%>
+               value="${client.numtel}"
+               <c:if test="${not empty client.numtel}">readonly</c:if> <%-- Ajoute 'readonly' si le numtel est déjà défini (mode modification) --%>
+               required>
+        <%-- Explication: si le numtel est déjà présent (pour une modification), il est en lecture seule.
+             Cela empêche l'utilisateur de changer le numéro de téléphone d'un client existant,
+             simplifiant la logique de mise à jour. Si ce n'est pas le comportement désiré
+             (si vous voulez permettre de changer le numtel d'un client existant), retirez 'readonly'.
+             Toutefois, si numtel est la clé primaire, le changer signifierait créer un nouveau client
+             ou une logique de remplacement complexe. Il est généralement préférable de le laisser en lecture seule.
+        --%>
     </div>
     <div class="mb-3">
         <label for="nom" class="form-label">Nom complet</label>

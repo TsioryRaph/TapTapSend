@@ -1,8 +1,13 @@
 package com.taptapsend.service;
 
+import com.itextpdf.io.font.constants.StandardFonts;
+import com.itextpdf.kernel.font.PdfFontFactory;
+import com.itextpdf.kernel.geom.PageSize;
 import com.itextpdf.kernel.pdf.PdfDocument;
 import com.itextpdf.kernel.pdf.PdfWriter;
 import com.itextpdf.layout.Document;
+import com.itextpdf.layout.Style;
+import com.itextpdf.layout.borders.SolidBorder;
 import com.itextpdf.layout.element.Paragraph;
 import com.itextpdf.layout.element.Table; // Importez la classe Table
 import com.itextpdf.layout.properties.TextAlignment; // Pour l'alignement du texte dans les cellules
@@ -85,48 +90,60 @@ public class EnvoyerService {
                 throw new IllegalArgumentException("L'envoi doit être vers un pays étranger.");
             }
 
-            // Trouver le taux de change et les frais d'envoi.
-            // IMPORTANT : Pour que ces DAOs opèrent dans la même transaction,
-            // idéalement les DAOs devraient avoir des méthodes qui acceptent un EntityManager
-            // et ne pas créer/fermer leur propre EM à chaque appel.
-            // Pour l'instant, je vais laisser votre structure actuelle qui est "un peu" transactionnelle
-            // mais ce n'est pas le pattern le plus robuste. Les findAll() ouvrent et ferment leur propre EM.
+            // --- SÉLECTION DES FRAIS (déjà implémentée) ---
+            // Récupérer tous les frais d'envoi possibles
+            // Assurez-vous que 'fraisEnvoiDAO' est accessible dans cette classe de service.
+            List<FraisEnvoi> tousLesFrais = fraisEnvoiDAO.findAll();
+
+            // Trouver le frais correspondant au montant de l'envoi
+            FraisEnvoi frais = null;
+            for (FraisEnvoi f : tousLesFrais) {
+                if (envoi.getMontant() >= f.getMontant1() && envoi.getMontant() <= f.getMontant2()) {
+                    frais = f;
+                    break; // Frais trouvé, on sort de la boucle
+                }
+            }
+
+            if (frais == null) {
+                throw new IllegalStateException("Aucun frais d'envoi défini pour le montant " + envoi.getMontant() + ".");
+            }
+
+            // --- LIGNE CRUCIALE : DÉFINIR LES FRAIS CALCULÉS SUR L'OBJET ENVOYER ---
+            // C'est cette ligne qui manquait et qui assure que le montant des frais est enregistré avec l'envoi.
+            envoi.setFraisAppliques(frais.getFrais());
+            // --- FIN DE LA MODIFICATION POUR LA SÉLECTION DES FRAIS ---
+
+            // Trouver le taux de change.
+            // Assurez-vous que 'tauxDAO' est accessible dans cette classe de service.
             Taux taux = tauxDAO.findAll().stream().findFirst().orElseThrow(
                     () -> new IllegalStateException("Aucun taux de change défini."));
 
-            FraisEnvoi frais = fraisEnvoiDAO.findAll().stream().findFirst().orElseThrow(
-                    () -> new IllegalStateException("Aucun frais d'envoi défini."));
-
-            int totalDebit = envoi.getMontant() + frais.getFrais();
+            // Utilise maintenant le 'fraisAppliques' de l'objet 'envoi' pour le calcul du débit
+            int totalDebit = envoi.getMontant() + envoi.getFraisAppliques();
 
             if (envoyeur.getSolde() < totalDebit) {
                 throw new IllegalArgumentException("Solde insuffisant pour effectuer l'envoi. Solde actuel: " + envoyeur.getSolde() + ", Montant requis: " + totalDebit);
             }
 
             envoyeur.setSolde(envoyeur.getSolde() - totalDebit);
-            // Assurez-vous que le calcul du montant reçu est correct (int / int peut tronquer)
-            // Si montant1 ou montant2 peuvent être des doubles, utilisez des doubles pour le calcul.
-            // Pour l'instant, je suppose qu'ils sont des entiers et que vous voulez une division entière.
             int montantRecu = (envoi.getMontant() * taux.getMontant2()) / taux.getMontant1();
             recepteur.setSolde(recepteur.getSolde() + montantRecu);
 
-            em.merge(envoyeur); // Met à jour l'envoyeur dans la base de données
-            em.merge(recepteur); // Met à jour le récepteur dans la base de données
+            em.merge(envoyeur);
+            em.merge(recepteur);
+            em.persist(envoi); // L'objet 'envoi' est maintenant persisté AVEC son 'fraisAppliques'
 
-            envoi.setDate(LocalDateTime.now()); // Définit la date de l'envoi à l'heure actuelle
-            em.persist(envoi); // Persiste la nouvelle entité envoi
-
-            et.commit(); // Valide la transaction
+            et.commit();
             logger.info("Transfert {} effectué avec succès. Envoyeur: {}, Récepteur: {}", envoi.getIdEnv(), envoyeur.getNumtel(), recepteur.getNumtel());
 
-            // Envoyer les emails de notification APRÈS le commit pour s'assurer que la transaction a réussi
+            // Envoyer les emails de notification APRÈS le commit
             try {
                 EmailUtil.sendEmail(
                         envoyeur.getMail(),
                         "Confirmation d'envoi d'argent",
                         "Bonjour " + envoyeur.getNom() + ",\n\nVous avez envoyé " + envoi.getMontant() +
                                 " EUR à " + recepteur.getNom() + " (" + recepteur.getNumtel() + ")" +
-                                ". Les frais d'envoi s'élèvent à " + frais.getFrais() + " EUR." +
+                                ". Les frais d'envoi s'élèvent à " + envoi.getFraisAppliques() + " EUR." + // Utilisez envoi.getFraisAppliques()
                                 "\nVotre nouveau solde est de " + envoyeur.getSolde() + " EUR." +
                                 "\n\nMerci d'utiliser Taptapsend.");
 
@@ -144,13 +161,13 @@ public class EnvoyerService {
 
         } catch (Exception ex) {
             if (et != null && et.isActive()) {
-                et.rollback(); // Annule la transaction en cas d'erreur
+                et.rollback();
             }
             logger.error("Erreur lors de la création de l'envoi : {}", ex.getMessage(), ex);
-            throw ex; // Re-lancer l'exception pour que le contrôleur puisse la gérer
+            throw ex;
         } finally {
             if (em != null && em.isOpen()) {
-                em.close(); // Ferme l'EntityManager
+                em.close();
             }
         }
     }
@@ -295,10 +312,15 @@ public class EnvoyerService {
         return envois;
     }
 
-    public double getTotalFrais() {
-        double total = envoyerDAO.getTotalFrais();
-        logger.debug("Total des frais: {}.", total);
-        return total;
+    /**
+     * Récupère la recette totale de l'opérateur.
+     *
+     * @return Le montant total des frais collectés.
+     */
+    public double getRecetteTotaleOperateur() { // Nom de méthode plus explicite
+        double totalRecette = envoyerDAO.getRecetteTotaleOperateur(); // <-- Modifié ici
+        logger.debug("Recette totale de l'opérateur: {}.", totalRecette); // <-- Modifié ici
+        return totalRecette;
     }
 
     /**
@@ -317,75 +339,87 @@ public class EnvoyerService {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         PdfWriter writer = new PdfWriter(baos);
         PdfDocument pdf = new PdfDocument(writer);
-        Document document = new Document(pdf);
+        Document document = new Document(pdf, PageSize.A4);
+        document.setMargins(30, 30, 30, 30);
 
         try {
-            // -- EN-TÊTE DU RELEVÉ --
-            // Date de la période
+            // Style commun
+            Style normalStyle = new Style()
+                    .setFontSize(12)
+                    .setFont(PdfFontFactory.createFont(StandardFonts.HELVETICA));
+
+            Style boldStyle = new Style()
+                    .setFontSize(12)
+                    .setBold()
+                    .setFont(PdfFontFactory.createFont(StandardFonts.HELVETICA_BOLD));
+
+            // -- EN-TÊTE --
             String monthName = java.time.Month.of(month).getDisplayName(
-                    java.time.format.TextStyle.FULL, Locale.FRENCH); // Utiliser Locale.FRENCH
-            document.add(new Paragraph("Date : " + monthName + " " + year).setTextAlignment(TextAlignment.LEFT));
+                    java.time.format.TextStyle.FULL, Locale.FRENCH);
+            document.add(new Paragraph("Date : " + monthName + " " + year)
+                    .addStyle(normalStyle)
+                    .setTextAlignment(TextAlignment.CENTER)
+                    .setMarginBottom(10));
 
-            // Informations du client
-            document.add(new Paragraph("Contact : " + client.getNumtel()).setTextAlignment(TextAlignment.LEFT));
-            document.add(new Paragraph(client.getNom()).setTextAlignment(TextAlignment.LEFT));
+            // Informations client - format compact comme dans l'exemple
+            Paragraph clientInfo = new Paragraph()
+                    .addStyle(normalStyle)
+                    .setTextAlignment(TextAlignment.LEFT);
 
-            // Lignes supprimées pour éviter l'erreur "Cannot resolve method 'getAge' in 'Client'"
-            // et "Cannot resolve method 'getSexe' in 'Client'"
-            /*
-            if (client.getAge() != 0) {
-                document.add(new Paragraph(client.getAge() + " ans").setTextAlignment(TextAlignment.LEFT));
-            }
+            clientInfo.add("Contact : " + client.getNumtel() + "\n");
+            clientInfo.add(client.getNom() + "\n");
+
+            // On a supprimé la ligne avec l'âge ici
+
+            // Ajouter sexe si disponible
             if (client.getSexe() != null && !client.getSexe().isEmpty()) {
-                document.add(new Paragraph(client.getSexe()).setTextAlignment(TextAlignment.LEFT));
+                clientInfo.add(client.getSexe() + "\n");
             }
-            */
 
-            // Solde actuel
-            document.add(new Paragraph("Solde actuel : " + String.format("%.2f", (double)client.getSolde()) + " EUR").setTextAlignment(TextAlignment.LEFT));
-            document.add(new Paragraph("\n")); // Ligne vide pour l'espacement
+            clientInfo.add("Solde actuel : " + String.format("%.2f", (double)client.getSolde()) + " EUR");
 
-            // -- DÉTAILS DES TRANSACTIONS (TABLEAU) --
-            document.add(new Paragraph("Détails des transactions:").setBold().setTextAlignment(TextAlignment.LEFT));
+            document.add(clientInfo);
             document.add(new Paragraph("\n"));
 
+            // -- TABLEAU DES TRANSACTIONS --
             if (envois != null && !envois.isEmpty()) {
-                // Créer un tableau avec 4 colonnes (Date, Raison, Nom du récepteur, Montant)
-                // Ajustez les largeurs relatives selon le contenu attendu pour chaque colonne
-                float[] columnWidths = {2f, 2f, 3f, 1.5f}; // Exemple: Date, Raison, Nom du récepteur, Montant
-                // CORRECTION ICI: Utiliser directement le tableau de floats pour le constructeur de Table
+                // Création du tableau avec 4 colonnes
+                float[] columnWidths = {2f, 3f, 3f, 2f};
                 Table table = new Table(columnWidths);
-                table.setWidth(UnitValue.createPercentValue(100)); // Le tableau prend 100% de la largeur disponible
+                table.setWidth(UnitValue.createPercentValue(100));
 
-                // Ajouter les en-têtes du tableau
-                table.addHeaderCell(new Cell().add(new Paragraph("Date").setBold()).setTextAlignment(TextAlignment.CENTER));
-                table.addHeaderCell(new Cell().add(new Paragraph("Raison").setBold()).setTextAlignment(TextAlignment.CENTER));
-                table.addHeaderCell(new Cell().add(new Paragraph("Nom du récepteur").setBold()).setTextAlignment(TextAlignment.CENTER));
-                table.addHeaderCell(new Cell().add(new Paragraph("Montant").setBold()).setTextAlignment(TextAlignment.RIGHT));
+                // En-têtes du tableau
+                table.addHeaderCell(createCell("Date", true, TextAlignment.CENTER));
+                table.addHeaderCell(createCell("Raison", true, TextAlignment.CENTER));
+                table.addHeaderCell(createCell("Nom du récepteur", true, TextAlignment.CENTER));
+                table.addHeaderCell(createCell("Montant", true, TextAlignment.CENTER));
 
-                DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy"); // Format Date seulement pour le tableau
-                double totalDebit = 0.0; // Variable pour accumuler le total des montants envoyés
+                DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+                double totalDebit = 0.0;
 
+                // Remplissage des données
                 for (Envoyer envoi : envois) {
                     String recepteurNom = (envoi.getRecepteur() != null) ? envoi.getRecepteur().getNom() : "Inconnu";
                     String dateFormatted = (envoi.getDate() != null) ? envoi.getDate().format(formatter) : "N/A";
 
-                    table.addCell(new Cell().add(new Paragraph(dateFormatted)).setTextAlignment(TextAlignment.CENTER));
-                    table.addCell(new Cell().add(new Paragraph(envoi.getRaison())).setTextAlignment(TextAlignment.LEFT));
-                    table.addCell(new Cell().add(new Paragraph(recepteurNom)).setTextAlignment(TextAlignment.LEFT));
-                    table.addCell(new Cell().add(new Paragraph(String.format("%.2f EUR", (double)envoi.getMontant()))).setTextAlignment(TextAlignment.RIGHT));
+                    table.addCell(createCell(dateFormatted, false, TextAlignment.LEFT));
+                    table.addCell(createCell(envoi.getRaison(), false, TextAlignment.LEFT));
+                    table.addCell(createCell(recepteurNom, false, TextAlignment.LEFT));
+                    table.addCell(createCell(String.format("%.2f", (double)envoi.getMontant()), false, TextAlignment.RIGHT));
 
-                    totalDebit += envoi.getMontant(); // Accumuler le montant envoyé
+                    totalDebit += envoi.getMontant();
                 }
 
                 document.add(table);
+                document.add(new Paragraph("\n"));
 
-                // -- TOTAL DÉBIT --
-                document.add(new Paragraph("\n")); // Ligne vide pour l'espacement
-                document.add(new Paragraph("Total Débit : " + String.format("%.2f EUR", totalDebit)).setBold().setTextAlignment(TextAlignment.RIGHT));
-
+                // Total débit
+                document.add(new Paragraph("Total Débit : " + String.format("%.2f", totalDebit) + " euros")
+                        .addStyle(boldStyle)
+                        .setTextAlignment(TextAlignment.RIGHT));
             } else {
-                document.add(new Paragraph("Aucun envoi trouvé pour cette période."));
+                document.add(new Paragraph("Aucun envoi trouvé pour cette période.")
+                        .addStyle(normalStyle));
             }
 
         } catch (Exception e) {
@@ -397,5 +431,20 @@ public class EnvoyerService {
             }
         }
         return baos.toByteArray();
+    }
+
+    // Méthode utilitaire pour créer une cellule (inchangée)
+    private Cell createCell(String text, boolean isHeader, TextAlignment alignment) {
+        Paragraph p = new Paragraph(text);
+        if (isHeader) {
+            p.setBold();
+        }
+
+        Cell cell = new Cell().add(p);
+        cell.setTextAlignment(alignment);
+        cell.setPadding(5);
+        cell.setBorder(new SolidBorder(0.5f));
+
+        return cell;
     }
 }

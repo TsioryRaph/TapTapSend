@@ -2,8 +2,8 @@ package com.taptapsend.model;
 
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
-import java.time.ZoneId;   // <--- Assurez-vous que cet import est là
-import java.util.Date;     // <--- Assurez-vous que cet import est là
+import java.time.ZoneId;
+import java.util.Date;
 
 @Entity
 @Table(name = "envoyer")
@@ -23,26 +23,48 @@ public class Envoyer {
     @Column(name = "montant")
     private int montant;
 
+    @Column(name = "frais_appliques") // Ce champ reste bien sûr
+    private int fraisAppliques;
+
     @Column(name = "date")
-    private LocalDateTime date; // CE CHAMP RESTE LocalDateTime
+    private LocalDateTime date;
 
     @Column(name = "raison", length = 255)
     private String raison;
 
     // Constructeurs
+
     public Envoyer() {
+        // Constructeur par défaut (nécessaire pour JPA)
+        this.fraisAppliques = 0; // <--- CORRECTION : Initialiser fraisAppliques à 0
     }
 
+    // CONSTRUCTEUR PRINCIPAL pour la création d'un Envoi depuis la couche web/présentation.
+    // Ce constructeur prend 6 arguments, car 'fraisAppliques' est calculé par la couche service.
     public Envoyer(String idEnv, Client envoyeur, Client recepteur, int montant, LocalDateTime date, String raison) {
         this.idEnv = idEnv;
         this.envoyeur = envoyeur;
         this.recepteur = recepteur;
         this.montant = montant;
+        this.fraisAppliques = 0; // <--- CORRECTION : Initialiser fraisAppliques à 0
         this.date = date;
         this.raison = raison;
     }
 
-    // Getters et Setters existants
+    // CONSTRUCTEUR AJOUTÉ pour une initialisation complète (peut être utilisé en interne ou pour des tests)
+    // Ce constructeur prend 7 arguments, incluant 'fraisAppliques'.
+    public Envoyer(String idEnv, Client envoyeur, Client recepteur, int montant, int fraisAppliques, LocalDateTime date, String raison) {
+        this.idEnv = idEnv;
+        this.envoyeur = envoyeur;
+        this.recepteur = recepteur;
+        this.montant = montant;
+        this.fraisAppliques = fraisAppliques; // Ici, il est fourni en argument
+        this.date = date;
+        this.raison = raison;
+    }
+
+
+    // Getters et Setters (inchangés pour la plupart)
     public String getIdEnv() {
         return idEnv;
     }
@@ -75,6 +97,15 @@ public class Envoyer {
         this.montant = montant;
     }
 
+    // Getters et Setters pour fraisAppliques (ESSENTIELS)
+    public int getFraisAppliques() {
+        return fraisAppliques;
+    }
+
+    public void setFraisAppliques(int fraisAppliques) {
+        this.fraisAppliques = fraisAppliques;
+    }
+
     public LocalDateTime getDate() {
         return date;
     }
@@ -91,18 +122,11 @@ public class Envoyer {
         this.raison = raison;
     }
 
-    // NOUVELLE MÉTHODE DE COMPATIBILITÉ POUR LE JSP
-    /**
-     * Retourne la date de l'envoi sous forme de java.util.Date pour la compatibilité avec JSTL fmt:formatDate.
-     * Cette méthode est utile pour l'affichage dans les JSP sans modifier le type LocalDateTime du modèle.
-     * @return La date de l'envoi convertie en java.util.Date, ou null si la date originale est null.
-     */
+    // MÉTHODE DE COMPATIBILITÉ POUR LE JSP (inchangée)
     public Date getDisplayDate() {
         if (this.date == null) {
             return null;
         }
-        // Convertit LocalDateTime (sans fuseau horaire) en un Instant (point dans le temps en UTC)
-        // en utilisant le fuseau horaire par défaut du système pour la conversion.
         return Date.from(this.date.atZone(ZoneId.systemDefault()).toInstant());
     }
 }

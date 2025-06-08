@@ -14,7 +14,7 @@ public class DashboardServlet extends BaseServlet {
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
-        double totalFrais = envoyerService.getTotalFrais();
+        double totalFrais = envoyerService.getRecetteTotaleOperateur();
         request.setAttribute("totalFrais", totalFrais);
         forwardToJsp("Dashboard/dashboard", request, response);
     }

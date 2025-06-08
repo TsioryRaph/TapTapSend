@@ -201,38 +201,41 @@ public class EnvoyerDAO extends GenericDAO<Envoyer> {
     }
 
     /**
-     * Calcule le total des frais d'envoi.
-     * Cette requête est sur la table FraisEnvoi.
-     * @return La somme totale des frais définis dans la table FraisEnvoi. Retourne 0.0 si aucun frais n'est défini ou si la table est vide.
+     * Calcule la recette totale de l'opérateur en sommant les frais appliqués
+     * sur toutes les opérations d'envoi enregistrées.
+     *
+     * @return La somme totale des frais appliqués sur les envois.
+     * Retourne 0.0 si aucun frais n'a été perçu ou si la table est vide.
      */
-    public double getTotalFrais() {
+    public double getRecetteTotaleOperateur() { // Nom de méthode plus explicite
         EntityManager em = getEntityManager();
         try {
-            // Requête pour sommer la colonne 'frais' de la table FraisEnvoi
-            // Assurez-vous que l'entité FraisEnvoi est correctement mappée dans votre modèle JPA.
-            Query query = em.createQuery("SELECT SUM(f.frais) FROM FraisEnvoi f");
-            Object result = null;
-            try {
-                result = query.getSingleResult();
-            } catch (NoResultException e) {
-                // Ceci peut arriver si la table FraisEnvoi est vide et SUM() retourne aucun résultat au lieu de null.
-                // Dans ce cas, la somme est 0.
-                return 0.0;
-            }
+            // Requête JPQL pour sommer la colonne 'fraisAppliques' de l'entité Envoyer.
+            // Le type Long est souvent utilisé pour les sommes en JPQL car SUM() retourne un Long.
+            Query query = em.createQuery("SELECT SUM(e.fraisAppliques) FROM Envoyer e", Long.class); // <-- Modifié ici
+            Long result = (Long) query.getSingleResult(); // Cast direct en Long
 
-            // Gère le cas où SUM() retourne null (par exemple, si la table est vide et le SGBD retourne null pour SUM(vide))
+            // Gère le cas où SUM() retourne null (par exemple, si la table Envoyer est vide).
             if (result == null) {
                 return 0.0;
             }
 
-            // Convertit le résultat (qui peut être Long ou BigDecimal selon la DB et le type de colonne) en double
-            return ((Number) result).doubleValue();
+            // Convertit le résultat Long en double
+            return result.doubleValue();
+        } catch (NoResultException e) {
+            // Cette exception n'est généralement pas lancée par SUM() qui retourne null si aucun résultat,
+            // mais c'est une bonne pratique de la laisser si d'autres requêtes pourraient l'utiliser.
+            // Pour SUM(), le cas 'result == null' gère l'absence de résultats.
+            return 0.0;
         } catch (Exception e) {
-            // Loggez l'erreur avant de la relancer, par exemple si la requête est mal formée ou si FraisEnvoi n'existe pas.
-            System.err.println("Erreur lors du calcul du total des frais : " + e.getMessage());
-            throw new RuntimeException("Erreur lors du calcul du total des frais.", e);
+            // Loggez l'erreur pour le débogage
+            System.err.println("Erreur lors du calcul de la recette totale de l'opérateur : " + e.getMessage());
+            // Relancez une exception Runtime pour indiquer un échec de l'opération
+            throw new RuntimeException("Erreur lors du calcul de la recette totale de l'opérateur.", e);
         } finally {
-            em.close();
+            if (em != null && em.isOpen()) {
+                em.close();
+            }
         }
     }
 }
