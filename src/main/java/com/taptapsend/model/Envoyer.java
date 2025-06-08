@@ -21,10 +21,10 @@ public class Envoyer {
     private Client recepteur;
 
     @Column(name = "montant")
-    private int montant;
+    private double montant; // CHANGÉ: int -> double
 
-    @Column(name = "frais_appliques") // Ce champ reste bien sûr
-    private int fraisAppliques;
+    @Column(name = "frais_appliques")
+    private double fraisAppliques; // CHANGÉ: int -> double
 
     @Column(name = "date")
     private LocalDateTime date;
@@ -33,38 +33,31 @@ public class Envoyer {
     private String raison;
 
     // Constructeurs
-
     public Envoyer() {
-        // Constructeur par défaut (nécessaire pour JPA)
-        this.fraisAppliques = 0; // <--- CORRECTION : Initialiser fraisAppliques à 0
+        this.fraisAppliques = 0.0; // CHANGÉ: 0 -> 0.0
     }
 
-    // CONSTRUCTEUR PRINCIPAL pour la création d'un Envoi depuis la couche web/présentation.
-    // Ce constructeur prend 6 arguments, car 'fraisAppliques' est calculé par la couche service.
-    public Envoyer(String idEnv, Client envoyeur, Client recepteur, int montant, LocalDateTime date, String raison) {
+    public Envoyer(String idEnv, Client envoyeur, Client recepteur, double montant, LocalDateTime date, String raison) { // CHANGÉ: int -> double
         this.idEnv = idEnv;
         this.envoyeur = envoyeur;
         this.recepteur = recepteur;
         this.montant = montant;
-        this.fraisAppliques = 0; // <--- CORRECTION : Initialiser fraisAppliques à 0
+        this.fraisAppliques = 0.0; // CHANGÉ: 0 -> 0.0
         this.date = date;
         this.raison = raison;
     }
 
-    // CONSTRUCTEUR AJOUTÉ pour une initialisation complète (peut être utilisé en interne ou pour des tests)
-    // Ce constructeur prend 7 arguments, incluant 'fraisAppliques'.
-    public Envoyer(String idEnv, Client envoyeur, Client recepteur, int montant, int fraisAppliques, LocalDateTime date, String raison) {
+    public Envoyer(String idEnv, Client envoyeur, Client recepteur, double montant, double fraisAppliques, LocalDateTime date, String raison) { // CHANGÉ: int -> double
         this.idEnv = idEnv;
         this.envoyeur = envoyeur;
         this.recepteur = recepteur;
         this.montant = montant;
-        this.fraisAppliques = fraisAppliques; // Ici, il est fourni en argument
+        this.fraisAppliques = fraisAppliques;
         this.date = date;
         this.raison = raison;
     }
 
-
-    // Getters et Setters (inchangés pour la plupart)
+    // Getters et Setters
     public String getIdEnv() {
         return idEnv;
     }
@@ -89,20 +82,19 @@ public class Envoyer {
         this.recepteur = recepteur;
     }
 
-    public int getMontant() {
+    public double getMontant() { // CHANGÉ: int -> double
         return montant;
     }
 
-    public void setMontant(int montant) {
+    public void setMontant(double montant) { // CHANGÉ: int -> double
         this.montant = montant;
     }
 
-    // Getters et Setters pour fraisAppliques (ESSENTIELS)
-    public int getFraisAppliques() {
+    public double getFraisAppliques() { // CHANGÉ: int -> double
         return fraisAppliques;
     }
 
-    public void setFraisAppliques(int fraisAppliques) {
+    public void setFraisAppliques(double fraisAppliques) { // CHANGÉ: int -> double
         this.fraisAppliques = fraisAppliques;
     }
 
@@ -122,7 +114,6 @@ public class Envoyer {
         this.raison = raison;
     }
 
-    // MÉTHODE DE COMPATIBILITÉ POUR LE JSP (inchangée)
     public Date getDisplayDate() {
         if (this.date == null) {
             return null;

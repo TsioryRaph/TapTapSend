@@ -21,7 +21,7 @@ public class Client {
     private String pays;
 
     @Column(name = "solde")
-    private int solde;
+    private double solde; // CHANGÉ: int -> double
 
     @Column(name = "mail", length = 100)
     private String mail;
@@ -32,12 +32,11 @@ public class Client {
     @OneToMany(mappedBy = "recepteur", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Envoyer> envoisRecus = new ArrayList<>();
 
-    // Constructeurs, getters et setters
-
+    // Constructeurs
     public Client() {
     }
 
-    public Client(String numtel, String nom, String sexe, String pays, int solde, String mail) {
+    public Client(String numtel, String nom, String sexe, String pays, double solde, String mail) { // CHANGÉ: int -> double
         this.numtel = numtel;
         this.nom = nom;
         this.sexe = sexe;
@@ -79,11 +78,11 @@ public class Client {
         this.pays = pays;
     }
 
-    public int getSolde() {
+    public double getSolde() { // CHANGÉ: int -> double
         return solde;
     }
 
-    public void setSolde(int solde) {
+    public void setSolde(double solde) { // CHANGÉ: int -> double
         this.solde = solde;
     }
 
@@ -112,13 +111,10 @@ public class Client {
     }
 
     public String getDevise() {
-        // Logique pour déterminer la devise en fonction du pays.
-        // On suppose que "Madagascar" est le pays local pour l'Ariary (MGA),
-        // tout autre pays implique un client international utilisant l'Euro (EUR).
         if (this.pays != null && this.pays.equalsIgnoreCase("Madagascar")) {
-            return "MGA"; // Ariary malgache
+            return "MGA";
         } else {
-            return "EUR"; // Euro pour les clients internationaux ou si le pays n'est pas spécifié
+            return "EUR";
         }
     }
 }

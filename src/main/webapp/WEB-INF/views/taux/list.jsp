@@ -25,8 +25,12 @@
                     <c:forEach items="${tauxList}" var="taux">
                         <tr>
                             <td>${taux.idtaux}</td>
-                            <td>${taux.montant1}</td>
-                            <td>${taux.montant2}</td>
+                            <td>
+                               <fmt:formatNumber value="${taux.montant1}" type="currency" currencyCode="EUR"/>
+                            </td>
+                            <td>
+                               <fmt:formatNumber value="${taux.montant2}" type="currency" currencyCode="MGA"/>
+                            </td>
                             <td>
                                 <a href="${pageContext.request.contextPath}/taux?action=edit&idtaux=${taux.idtaux}"
                                    class="btn btn-sm btn-outline-primary btn-edit">

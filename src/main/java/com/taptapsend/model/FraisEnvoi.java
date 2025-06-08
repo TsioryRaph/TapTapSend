@@ -10,26 +10,26 @@ public class FraisEnvoi {
     private String idfrais;
 
     @Column(name = "montant1")
-    private int montant1;
+    private double montant1; // CHANGÉ: int -> double
 
     @Column(name = "montant2")
-    private int montant2;
+    private double montant2; // CHANGÉ: int -> double
 
     @Column(name = "frais")
-    private int frais;
+    private double frais; // CHANGÉ: int -> double
 
-    // Constructeurs, getters et setters
-
+    // Constructeurs
     public FraisEnvoi() {
     }
 
-    public FraisEnvoi(String idfrais, int montant1, int montant2, int frais) {
+    public FraisEnvoi(String idfrais, double montant1, double montant2, double frais) { // CHANGÉ: int -> double
         this.idfrais = idfrais;
         this.montant1 = montant1;
         this.montant2 = montant2;
         this.frais = frais;
     }
 
+    // Getters et Setters
     public String getIdfrais() {
         return idfrais;
     }
@@ -38,27 +38,27 @@ public class FraisEnvoi {
         this.idfrais = idfrais;
     }
 
-    public int getMontant1() {
+    public double getMontant1() { // CHANGÉ: int -> double
         return montant1;
     }
 
-    public void setMontant1(int montant1) {
+    public void setMontant1(double montant1) { // CHANGÉ: int -> double
         this.montant1 = montant1;
     }
 
-    public int getMontant2() {
+    public double getMontant2() { // CHANGÉ: int -> double
         return montant2;
     }
 
-    public void setMontant2(int montant2) {
+    public void setMontant2(double montant2) { // CHANGÉ: int -> double
         this.montant2 = montant2;
     }
 
-    public int getFrais() {
+    public double getFrais() { // CHANGÉ: int -> double
         return frais;
     }
 
-    public void setFrais(int frais) {
+    public void setFrais(double frais) { // CHANGÉ: int -> double
         this.frais = frais;
     }
 }

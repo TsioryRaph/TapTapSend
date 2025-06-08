@@ -13,14 +13,15 @@
 
 <form id="pdfForm" action="${pageContext.request.contextPath}/envoyer" method="get">
     <div class="mb-3">
-        <label for="numtelReleve" class="form-label">Client</label> <%-- Changé le label pour "Client" --%>
-        <%-- L'input text est remplacé par un select pour une meilleure UX --%>
+        <label for="numtelReleve" class="form-label">Client envoyeur</label>
+        <%-- Seuls les clients qui ont envoyé de l'argent apparaissent maintenant --%>
         <select class="form-select" id="numtelReleve" name="numtel" required>
-            <option value="">Sélectionner un client</option>
+            <option value="">Sélectionner un client envoyeur</option>
             <c:forEach items="${clients}" var="client">
-                <option value="${client.numtel}">${client.nom} (${client.numtel})</option>
+                <option value="${client.numtel}">${client.nom} (${client.numtel}) - ${client.pays}</option>
             </c:forEach>
         </select>
+        <div class="form-text">Seuls les clients ayant effectué des envois sont affichés.</div>
     </div>
 
     <div class="mb-3">

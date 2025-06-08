@@ -16,6 +16,9 @@ public class DashboardServlet extends BaseServlet {
             throws ServletException, IOException {
         double totalFrais = envoyerService.getRecetteTotaleOperateur();
         request.setAttribute("totalFrais", totalFrais);
+
+        // CORRECTION: Utiliser le bon chemin et la bonne méthode
+        // Si vous utilisez un template système, utilisez forwardToJsp avec le chemin correct
         forwardToJsp("Dashboard/dashboard", request, response);
     }
 }

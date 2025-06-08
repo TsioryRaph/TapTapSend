@@ -27,9 +27,15 @@
                     <c:forEach items="${fraisList}" var="frais">
                         <tr>
                             <td>${frais.idfrais}</td>
-                            <td>${frais.montant1}</td>
-                            <td>${frais.montant2}</td>
-                            <td>${frais.frais}</td>
+                            <td>
+                                <fmt:formatNumber value="${frais.montant1}" type="currency" currencyCode="EUR"/>
+                            </td>
+                            <td>
+                                <fmt:formatNumber value="${frais.montant2}" type="currency" currencyCode="EUR"/>
+                            </td>
+                            <td>
+                                <fmt:formatNumber value="${frais.frais}" type="currency" currencyCode="EUR"/>
+                            </td>
                             <td>
                                 <a href="${pageContext.request.contextPath}/frais?action=edit&idfrais=${frais.idfrais}"
                                    class="btn btn-sm btn-outline-primary btn-edit">

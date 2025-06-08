@@ -9,10 +9,10 @@ import com.itextpdf.layout.Document;
 import com.itextpdf.layout.Style;
 import com.itextpdf.layout.borders.SolidBorder;
 import com.itextpdf.layout.element.Paragraph;
-import com.itextpdf.layout.element.Table; // Importez la classe Table
-import com.itextpdf.layout.properties.TextAlignment; // Pour l'alignement du texte dans les cellules
-import com.itextpdf.layout.properties.UnitValue; // Pour définir la largeur des colonnes
-import com.itextpdf.layout.element.Cell; // Pour les cellules du tableau
+import com.itextpdf.layout.element.Table;
+import com.itextpdf.layout.properties.TextAlignment;
+import com.itextpdf.layout.properties.UnitValue;
+import com.itextpdf.layout.element.Cell;
 
 import java.io.IOException;
 
@@ -33,7 +33,7 @@ import java.io.ByteArrayOutputStream;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
-import java.util.Locale; // Pour le nom du mois en français
+import java.util.Locale;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -74,7 +74,6 @@ public class EnvoyerService {
             et = em.getTransaction();
             et.begin();
 
-            // Récupérer les entités Client dans le contexte de l'EntityManager actuel
             Client envoyeur = em.find(Client.class, envoi.getEnvoyeur().getNumtel());
             Client recepteur = em.find(Client.class, envoi.getRecepteur().getNumtel());
 
@@ -85,78 +84,120 @@ public class EnvoyerService {
                 throw new IllegalArgumentException("Destinataire introuvable: " + envoi.getRecepteur().getNumtel());
             }
 
-            // Vérifier que l'envoi est vers un pays étranger
             if (envoyeur.getPays().equals(recepteur.getPays())) {
                 throw new IllegalArgumentException("L'envoi doit être vers un pays étranger.");
             }
 
-            // --- SÉLECTION DES FRAIS (déjà implémentée) ---
-            // Récupérer tous les frais d'envoi possibles
-            // Assurez-vous que 'fraisEnvoiDAO' est accessible dans cette classe de service.
+            Taux taux = tauxDAO.findAll().stream().findFirst().orElseThrow(
+                    () -> new IllegalStateException("Aucun taux de change défini."));
+
+            logger.info("Taux de change utilisé: {} EUR = {} MGA", taux.getMontant1(), taux.getMontant2());
+
+            // --- CONVERSION DU MONTANT VERS EUR AVANT CALCUL DES FRAIS ---
+            double montantEnEur = envoi.getMontant(); // CHANGÉ: int -> double
+
+            if ("MGA".equals(envoyeur.getDevise())) {
+                // Convertir MGA vers EUR : montantMGA * montant1EUR / montant2MGA
+                montantEnEur = (envoi.getMontant() * taux.getMontant1()) / taux.getMontant2();
+                logger.info("Conversion du montant: {} MGA = {} EUR", envoi.getMontant(), montantEnEur);
+            } else {
+                logger.info("Montant déjà en EUR: {} EUR", montantEnEur);
+            }
+
+            // --- SÉLECTION DES FRAIS BASÉE SUR LE MONTANT EN EUR ---
             List<FraisEnvoi> tousLesFrais = fraisEnvoiDAO.findAll();
 
-            // Trouver le frais correspondant au montant de l'envoi
             FraisEnvoi frais = null;
             for (FraisEnvoi f : tousLesFrais) {
-                if (envoi.getMontant() >= f.getMontant1() && envoi.getMontant() <= f.getMontant2()) {
+                logger.debug("Vérification frais: {} EUR <= {} EUR <= {} EUR", f.getMontant1(), montantEnEur, f.getMontant2());
+                if (montantEnEur >= f.getMontant1() && montantEnEur <= f.getMontant2()) {
                     frais = f;
-                    break; // Frais trouvé, on sort de la boucle
+                    logger.info("Frais trouvés: ID={}, Montant={} EUR pour {} EUR", f.getIdfrais(), f.getFrais(), montantEnEur);
+                    break;
                 }
             }
 
             if (frais == null) {
-                throw new IllegalStateException("Aucun frais d'envoi défini pour le montant " + envoi.getMontant() + ".");
+                throw new IllegalStateException("Aucun frais d'envoi défini pour le montant " + montantEnEur +
+                        " EUR (équivalent de " + envoi.getMontant() + " " + envoyeur.getDevise() + "). Veuillez contacter l'administrateur.");
             }
 
-            // --- LIGNE CRUCIALE : DÉFINIR LES FRAIS CALCULÉS SUR L'OBJET ENVOYER ---
-            // C'est cette ligne qui manquait et qui assure que le montant des frais est enregistré avec l'envoi.
             envoi.setFraisAppliques(frais.getFrais());
-            // --- FIN DE LA MODIFICATION POUR LA SÉLECTION DES FRAIS ---
 
-            // Trouver le taux de change.
-            // Assurez-vous que 'tauxDAO' est accessible dans cette classe de service.
-            Taux taux = tauxDAO.findAll().stream().findFirst().orElseThrow(
-                    () -> new IllegalStateException("Aucun taux de change défini."));
+            // --- CALCUL DU DÉBIT TOTAL DANS LA DEVISE DE L'ENVOYEUR ---
+            double fraisEnDeviseEnvoyeur = frais.getFrais(); // CHANGÉ: int -> double
 
-            // Utilise maintenant le 'fraisAppliques' de l'objet 'envoi' pour le calcul du débit
-            int totalDebit = envoi.getMontant() + envoi.getFraisAppliques();
+            if ("MGA".equals(envoyeur.getDevise())) {
+                fraisEnDeviseEnvoyeur = (frais.getFrais() * taux.getMontant2()) / taux.getMontant1();
+                logger.info("Conversion des frais: {} EUR = {} MGA", frais.getFrais(), fraisEnDeviseEnvoyeur);
+            }
+
+            double totalDebit = envoi.getMontant() + fraisEnDeviseEnvoyeur; // CHANGÉ: int -> double
+            logger.info("Calcul débit total: {} + {} = {} {}", envoi.getMontant(), fraisEnDeviseEnvoyeur, totalDebit, envoyeur.getDevise());
 
             if (envoyeur.getSolde() < totalDebit) {
-                throw new IllegalArgumentException("Solde insuffisant pour effectuer l'envoi. Solde actuel: " + envoyeur.getSolde() + ", Montant requis: " + totalDebit);
+                throw new IllegalArgumentException("Solde insuffisant pour effectuer l'envoi. Solde actuel: " +
+                        envoyeur.getSolde() + " " + envoyeur.getDevise() + ", Montant requis: " + totalDebit + " " + envoyeur.getDevise());
             }
 
             envoyeur.setSolde(envoyeur.getSolde() - totalDebit);
-            int montantRecu = (envoi.getMontant() * taux.getMontant2()) / taux.getMontant1();
+            logger.info("Nouveau solde envoyeur: {} {}", envoyeur.getSolde(), envoyeur.getDevise());
+
+            // --- CALCUL DU MONTANT REÇU PAR LE RÉCEPTEUR ---
+            double montantRecu; // CHANGÉ: int -> double
+            if ("EUR".equals(envoyeur.getDevise())) {
+                montantRecu = (envoi.getMontant() * taux.getMontant2()) / taux.getMontant1();
+                logger.info("Conversion pour récepteur: {} EUR = {} MGA", envoi.getMontant(), montantRecu);
+            } else {
+                montantRecu = (envoi.getMontant() * taux.getMontant1()) / taux.getMontant2();
+                logger.info("Conversion pour récepteur: {} MGA = {} EUR", envoi.getMontant(), montantRecu);
+            }
+
             recepteur.setSolde(recepteur.getSolde() + montantRecu);
+            logger.info("Nouveau solde récepteur: {} {}", recepteur.getSolde(), recepteur.getDevise());
 
             em.merge(envoyeur);
             em.merge(recepteur);
-            em.persist(envoi); // L'objet 'envoi' est maintenant persisté AVEC son 'fraisAppliques'
+            em.persist(envoi);
 
             et.commit();
-            logger.info("Transfert {} effectué avec succès. Envoyeur: {}, Récepteur: {}", envoi.getIdEnv(), envoyeur.getNumtel(), recepteur.getNumtel());
+            logger.info("Transfert {} effectué avec succès. Envoyeur: {}, Récepteur: {}, Montant: {} {}, Frais: {} EUR",
+                    envoi.getIdEnv(), envoyeur.getNumtel(), recepteur.getNumtel(), envoi.getMontant(), envoyeur.getDevise(), frais.getFrais());
 
-            // Envoyer les emails de notification APRÈS le commit
+            // Emails de notification (adaptés pour double)
             try {
-                EmailUtil.sendEmail(
-                        envoyeur.getMail(),
-                        "Confirmation d'envoi d'argent",
-                        "Bonjour " + envoyeur.getNom() + ",\n\nVous avez envoyé " + envoi.getMontant() +
-                                " EUR à " + recepteur.getNom() + " (" + recepteur.getNumtel() + ")" +
-                                ". Les frais d'envoi s'élèvent à " + envoi.getFraisAppliques() + " EUR." + // Utilisez envoi.getFraisAppliques()
-                                "\nVotre nouveau solde est de " + envoyeur.getSolde() + " EUR." +
-                                "\n\nMerci d'utiliser Taptapsend.");
+                String messageEnvoyeur = String.format(
+                        "Bonjour %s,\n\nVous avez envoyé %.2f %s à %s (%s).\n" +
+                                "Les frais d'envoi s'élèvent à %.2f EUR (%.2f %s).\n" +
+                                "Votre nouveau solde est de %.2f %s.\n\n" +
+                                "Le destinataire recevra %.2f %s.\n\n" +
+                                "Merci d'utiliser Taptapsend.",
+                        envoyeur.getNom(),
+                        envoi.getMontant(), envoyeur.getDevise(),
+                        recepteur.getNom(), recepteur.getNumtel(),
+                        frais.getFrais(), fraisEnDeviseEnvoyeur, envoyeur.getDevise(),
+                        envoyeur.getSolde(), envoyeur.getDevise(),
+                        montantRecu, recepteur.getDevise()
+                );
 
-                EmailUtil.sendEmail(
-                        recepteur.getMail(),
-                        "Réception d'argent",
-                        "Bonjour " + recepteur.getNom() + ",\n\nVous avez reçu " + montantRecu +
-                                " MGA de " + envoyeur.getNom() + " (" + envoyeur.getNumtel() + ")" +
-                                ".\nVotre nouveau solde est de " + recepteur.getSolde() + " MGA." +
-                                "\n\nMerci d'utiliser Taptapsend.");
+                EmailUtil.sendEmail(envoyeur.getMail(), "Confirmation d'envoi d'argent", messageEnvoyeur);
+
+                String messageRecepteur = String.format(
+                        "Bonjour %s,\n\nVous avez reçu %.2f %s de %s (%s).\n" +
+                                "Votre nouveau solde est de %.2f %s.\n\n" +
+                                "Merci d'utiliser Taptapsend.",
+                        recepteur.getNom(),
+                        montantRecu, recepteur.getDevise(),
+                        envoyeur.getNom(), envoyeur.getNumtel(),
+                        recepteur.getSolde(), recepteur.getDevise()
+                );
+
+                EmailUtil.sendEmail(recepteur.getMail(), "Réception d'argent", messageRecepteur);
+
                 logger.info("Emails envoyés avec succès pour le transfert {}.", envoi.getIdEnv());
             } catch (Exception emailEx) {
-                logger.warn("Erreur lors de l'envoi de l'email (l'opération a été enregistrée) pour le transfert {}) : {}", envoi.getIdEnv(), emailEx.getMessage(), emailEx);
+                logger.warn("Erreur lors de l'envoi de l'email pour le transfert {} : {}",
+                        envoi.getIdEnv(), emailEx.getMessage(), emailEx);
             }
 
         } catch (Exception ex) {
@@ -221,11 +262,10 @@ public class EnvoyerService {
             existingEnvoi.setEnvoyeur(envoyeur);
             existingEnvoi.setRecepteur(recepteur);
             existingEnvoi.setMontant(updatedEnvoi.getMontant());
-            // Conserver la date originale ou mettre à jour avec LocalDateTime.now() si c'est une date de modification
-            existingEnvoi.setDate(updatedEnvoi.getDate()); // Ou LocalDateTime.now() si c'est une date de modification
+            existingEnvoi.setDate(updatedEnvoi.getDate());
             existingEnvoi.setRaison(updatedEnvoi.getRaison());
 
-            em.merge(existingEnvoi); // Merge explicite pour s'assurer que les changements sont pris en compte
+            em.merge(existingEnvoi);
 
             et.commit();
             logger.info("Envoi avec ID {} mis à jour avec succès.", updatedEnvoi.getIdEnv());
@@ -242,7 +282,6 @@ public class EnvoyerService {
             }
         }
     }
-
 
     /**
      * Supprime une opération d'envoi par son ID.
@@ -280,15 +319,14 @@ public class EnvoyerService {
         }
     }
 
-
     /**
      * Récupère toutes les opérations d'envoi.
      * @return La liste de toutes les opérations d'envoi.
      */
     public List<Envoyer> getAllEnvois() {
         List<Envoyer> envois = envoyerDAO.findAll();
-        if (envois == null) { // Assurez-vous que le DAO retourne une liste vide au lieu de null
-            return List.of(); // Utilisation de List.of() (Java 9+) pour retourner une liste immuable vide
+        if (envois == null) {
+            return List.of();
         }
         logger.debug("Récupération de {} envois.", envois.size());
         return envois;
@@ -317,9 +355,9 @@ public class EnvoyerService {
      *
      * @return Le montant total des frais collectés.
      */
-    public double getRecetteTotaleOperateur() { // Nom de méthode plus explicite
-        double totalRecette = envoyerDAO.getRecetteTotaleOperateur(); // <-- Modifié ici
-        logger.debug("Recette totale de l'opérateur: {}.", totalRecette); // <-- Modifié ici
+    public double getRecetteTotaleOperateur() {
+        double totalRecette = envoyerDAO.getRecetteTotaleOperateur();
+        logger.debug("Recette totale de l'opérateur: {}.", totalRecette);
         return totalRecette;
     }
 
@@ -369,14 +407,12 @@ public class EnvoyerService {
             clientInfo.add("Contact : " + client.getNumtel() + "\n");
             clientInfo.add(client.getNom() + "\n");
 
-            // On a supprimé la ligne avec l'âge ici
-
             // Ajouter sexe si disponible
             if (client.getSexe() != null && !client.getSexe().isEmpty()) {
                 clientInfo.add(client.getSexe() + "\n");
             }
 
-            clientInfo.add("Solde actuel : " + String.format("%.2f", (double)client.getSolde()) + " EUR");
+            clientInfo.add("Solde actuel : " + String.format("%.2f", (double)client.getSolde()) + " " + client.getDevise());
 
             document.add(clientInfo);
             document.add(new Paragraph("\n"));
@@ -414,7 +450,7 @@ public class EnvoyerService {
                 document.add(new Paragraph("\n"));
 
                 // Total débit
-                document.add(new Paragraph("Total Débit : " + String.format("%.2f", totalDebit) + " euros")
+                document.add(new Paragraph("Total Débit : " + String.format("%.2f", totalDebit) + " " + client.getDevise())
                         .addStyle(boldStyle)
                         .setTextAlignment(TextAlignment.RIGHT));
             } else {
@@ -433,7 +469,7 @@ public class EnvoyerService {
         return baos.toByteArray();
     }
 
-    // Méthode utilitaire pour créer une cellule (inchangée)
+    // Méthode utilitaire pour créer une cellule
     private Cell createCell(String text, boolean isHeader, TextAlignment alignment) {
         Paragraph p = new Paragraph(text);
         if (isHeader) {

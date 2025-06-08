@@ -61,21 +61,20 @@ public class TauxServlet extends BaseServlet {
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
-        // IMPORTANT : Définir le type de contenu de la réponse pour le JSON
         response.setContentType("application/json");
         response.setCharacterEncoding("UTF-8");
 
         String idtaux = request.getParameter("idtaux");
-        int montant1 = 0;
-        int montant2 = 0;
+        double montant1 = 0.0; // CHANGÉ: int -> double
+        double montant2 = 0.0; // CHANGÉ: int -> double
 
         try {
-            montant1 = Integer.parseInt(request.getParameter("montant1"));
-            montant2 = Integer.parseInt(request.getParameter("montant2"));
+            montant1 = Double.parseDouble(request.getParameter("montant1")); // CHANGÉ: Integer.parseInt -> Double.parseDouble
+            montant2 = Double.parseDouble(request.getParameter("montant2")); // CHANGÉ: Integer.parseInt -> Double.parseDouble
         } catch (NumberFormatException e) {
             String jsonError = "{\"error\": \"Les montants doivent être des nombres valides.\"}";
             response.getWriter().write(jsonError);
-            return; // Arrêter l'exécution
+            return;
         }
 
         Taux taux = new Taux(idtaux, montant1, montant2);
@@ -83,7 +82,6 @@ public class TauxServlet extends BaseServlet {
         String successMessage = "";
         String errorMessage = "";
 
-        // Vérifie si le taux existe déjà pour décider de créer ou mettre à jour
         if (tauxService.getTaux(idtaux) != null) {
             tauxService.updateTaux(taux);
             successMessage = "Taux mis à jour avec succès !";
@@ -92,13 +90,11 @@ public class TauxServlet extends BaseServlet {
                 tauxService.createTaux(taux);
                 successMessage = "Taux créé avec succès !";
             } catch (Exception e) {
-                e.printStackTrace(); // Log l'exception pour le débogage
+                e.printStackTrace();
                 errorMessage = "Erreur lors de la création du taux : " + e.getMessage();
-                // Ajoutez ici une logique pour les erreurs de doublon si l'ID est généré côté client
             }
         }
 
-        // Préparer la réponse JSON pour le JavaScript dans le template
         if (!successMessage.isEmpty()) {
             String redirectUrl = request.getContextPath() + "/taux?success=" + successMessage.replace(" ", "+");
             response.getWriter().write(gson.toJson(new RedirectResponse(redirectUrl)));

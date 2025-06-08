@@ -207,25 +207,21 @@ public class EnvoyerDAO extends GenericDAO<Envoyer> {
      * @return La somme totale des frais appliqués sur les envois.
      * Retourne 0.0 si aucun frais n'a été perçu ou si la table est vide.
      */
-    public double getRecetteTotaleOperateur() { // Nom de méthode plus explicite
+    public double getRecetteTotaleOperateur() {
         EntityManager em = getEntityManager();
         try {
-            // Requête JPQL pour sommer la colonne 'fraisAppliques' de l'entité Envoyer.
-            // Le type Long est souvent utilisé pour les sommes en JPQL car SUM() retourne un Long.
-            Query query = em.createQuery("SELECT SUM(e.fraisAppliques) FROM Envoyer e", Long.class); // <-- Modifié ici
-            Long result = (Long) query.getSingleResult(); // Cast direct en Long
+            // CORRECTION: Utiliser Double.class au lieu de Long.class car fraisAppliques est maintenant de type double
+            Query query = em.createQuery("SELECT SUM(e.fraisAppliques) FROM Envoyer e", Double.class);
+            Double result = (Double) query.getSingleResult(); // Cast en Double au lieu de Long
 
             // Gère le cas où SUM() retourne null (par exemple, si la table Envoyer est vide).
             if (result == null) {
                 return 0.0;
             }
 
-            // Convertit le résultat Long en double
-            return result.doubleValue();
+            // Retourne directement le résultat Double (pas besoin de conversion)
+            return result;
         } catch (NoResultException e) {
-            // Cette exception n'est généralement pas lancée par SUM() qui retourne null si aucun résultat,
-            // mais c'est une bonne pratique de la laisser si d'autres requêtes pourraient l'utiliser.
-            // Pour SUM(), le cas 'result == null' gère l'absence de résultats.
             return 0.0;
         } catch (Exception e) {
             // Loggez l'erreur pour le débogage

@@ -102,9 +102,9 @@ public class ClientServlet extends BaseServlet {
         String pays = request.getParameter("pays");
         String mail = request.getParameter("mail");
 
-        int solde = 0;
+        double solde = 0.0; // CHANGÉ: int -> double
         try {
-            solde = Integer.parseInt(request.getParameter("solde")); // Convertit le solde en entier
+            solde = Double.parseDouble(request.getParameter("solde")); // CHANGÉ: Integer.parseInt -> Double.parseDouble
         } catch (NumberFormatException e) {
             // Gère l'erreur si le solde n'est pas un nombre valide.
             String jsonError = "{\"error\": \"Le solde doit être un nombre valide.\"}";
@@ -118,46 +118,25 @@ public class ClientServlet extends BaseServlet {
         String errorMessage = "";
 
         // >>> LOGIQUE CLÉ : DISTINGUER CRÉATION ET MISE À JOUR <<<
-        // Le champ 'originalNumtel' est envoyé par le JSP UNIQUEMENT si le formulaire est en mode modification.
-        // Sa présence (non null et non vide) indique que l'utilisateur tente de modifier un client existant.
         String originalNumtel = request.getParameter("originalNumtel");
         boolean isUpdateOperation = (originalNumtel != null && !originalNumtel.trim().isEmpty());
 
         if (isUpdateOperation) {
-            // SCÉNARIO : C'est une opération de MISE À JOUR d'un client existant.
-            // Dans votre JSP, le champ 'numtel' est marqué 'readonly' en mode modification.
-            // Cela signifie que l'utilisateur ne peut pas changer le numéro de téléphone existant.
-            // Par conséquent, le 'numtel' soumis est forcément l'original, et nous n'avons pas
-            // à vérifier si le nouveau 'numtel' est déjà pris par un autre client.
-            // Si vous décidez de rendre le 'numtel' modifiable en mode update,
-            // vous devrez ajouter ici une vérification si le nouveau numtel (s'il diffère de originalNumtel)
-            // est déjà pris par un AUTRE client.
-
-            clientService.updateClient(client); // Appelle le service pour mettre à jour le client
+            clientService.updateClient(client);
             successMessage = "Client mis à jour avec succès !";
-
         } else {
-            // SCÉNARIO : C'est une opération de CRÉATION d'un nouveau client.
-            // On vérifie STRICTEMENT si le numéro de téléphone soumis est déjà utilisé par un client existant.
-            // Si c'est le cas, on bloque la création et on renvoie un message d'erreur.
             if (clientService.getClient(numtel) != null) {
                 errorMessage = "Ce numéro de téléphone est déjà utilisé par un client existant. Impossible de créer un nouveau client avec ce numéro.";
-                response.getWriter().write(gson.toJson(new ErrorResponse(errorMessage))); // Renvoie une erreur JSON
-                return; // Arrête l'exécution pour empêcher la création/l'écrasement
+                response.getWriter().write(gson.toJson(new ErrorResponse(errorMessage)));
+                return;
             }
 
-            // Si le numéro de téléphone n'est pas utilisé, on procède à la création du nouveau client.
             try {
-                clientService.createClient(client); // Appelle le service pour créer le nouveau client
+                clientService.createClient(client);
                 successMessage = "Client créé avec succès !";
             } catch (Exception e) {
-                // Ce bloc `catch` agit comme un filet de sécurité.
-                // Il capture les erreurs potentielles lors de la création, notamment
-                // si une contrainte UNIQUE de la base de données est violée (ex: à cause d'une condition de concurrence
-                // où un autre processus aurait créé le même numéro juste avant).
                 errorMessage = "Erreur lors de la création du client : " + e.getMessage();
-                // Si l'erreur provient spécifiquement d'une violation de contrainte de doublon (selon le message d'erreur de la DB)
-                if (e.getMessage() != null && e.getMessage().contains("Duplicate entry")) { // Exemple pour MySQL/PostgreSQL
+                if (e.getMessage() != null && e.getMessage().contains("Duplicate entry")) {
                     errorMessage = "Un client avec ce numéro de téléphone existe déjà. Impossible de créer un nouveau client avec ce numéro.";
                 }
             }
@@ -165,12 +144,9 @@ public class ClientServlet extends BaseServlet {
 
         // Préparer la réponse JSON pour le JavaScript côté client.
         if (!successMessage.isEmpty()) {
-            // En cas de succès (mise à jour ou nouvelle création sans doublon), renvoie une URL de redirection.
             String redirectUrl = request.getContextPath() + "/clients?success=" + successMessage.replace(" ", "+");
             response.getWriter().write(gson.toJson(new RedirectResponse(redirectUrl)));
         } else if (!errorMessage.isEmpty()) {
-            // En cas d'erreur (ex: solde invalide, ou tentative de création avec un numtel existant déjà),
-            // renvoie un message d'erreur.
             response.getWriter().write(gson.toJson(new ErrorResponse(errorMessage)));
         }
     }

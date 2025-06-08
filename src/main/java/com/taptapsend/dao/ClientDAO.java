@@ -21,4 +21,15 @@ public class ClientDAO extends GenericDAO<Client> {
             em.close();
         }
     }
+
+    public List<Client> findClientsWithTransactions() {
+        EntityManager em = getEntityManager();
+        try {
+            return em.createQuery(
+                            "SELECT DISTINCT e.envoyeur FROM Envoyer e", Client.class)
+                    .getResultList();
+        } finally {
+            em.close();
+        }
+    }
 }

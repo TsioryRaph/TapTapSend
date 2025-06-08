@@ -52,7 +52,7 @@
     <div class="mb-3">
         <label for="solde" class="form-label">Solde initial</label>
         <input type="number" class="form-control" id="solde" name="solde"
-               value="${client.solde}" required>
+               value="${client.solde}" step="0.01" inputmode="decimal" required>
     </div>
     <div class="mb-3">
         <label for="mail" class="form-label">Email</label>

@@ -57,14 +57,14 @@ public class FraisEnvoiServlet extends BaseServlet {
         response.setCharacterEncoding("UTF-8");
 
         String idfrais = request.getParameter("idfrais");
-        int montant1 = 0;
-        int montant2 = 0;
-        int fraisVal = 0;
+        double montant1 = 0.0; // CHANGÉ: int -> double
+        double montant2 = 0.0; // CHANGÉ: int -> double
+        double fraisVal = 0.0; // CHANGÉ: int -> double
 
         try {
-            montant1 = Integer.parseInt(request.getParameter("montant1"));
-            montant2 = Integer.parseInt(request.getParameter("montant2"));
-            fraisVal = Integer.parseInt(request.getParameter("frais"));
+            montant1 = Double.parseDouble(request.getParameter("montant1")); // CHANGÉ: Integer.parseInt -> Double.parseDouble
+            montant2 = Double.parseDouble(request.getParameter("montant2")); // CHANGÉ: Integer.parseInt -> Double.parseDouble
+            fraisVal = Double.parseDouble(request.getParameter("frais")); // CHANGÉ: Integer.parseInt -> Double.parseDouble
         } catch (NumberFormatException e) {
             String jsonError = "{\"error\": \"Les montants et frais doivent être des nombres valides.\"}";
             response.getWriter().write(jsonError);

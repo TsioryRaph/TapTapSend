@@ -90,16 +90,11 @@ public class EnvoyerServlet extends BaseServlet {
                 request.setAttribute("envois", envois);
                 // Utilise forwardToTemplate pour inclure la liste dans la page principale
                 forwardToTemplate("envoyer/list", "envoyer", "Liste des Envois", request, response);
-            } else if ("showPdfForm".equals(action)) {
-                // Gère l'affichage du formulaire de génération de relevé PDF dans une modale
-                // C'est la CORRECTION MAJEURE ici :
-                // Pour les requêtes AJAX destinées à remplir une modale,
-                // on ne doit PAS utiliser forwardToTemplate.
-                // On forwarde DIRECTEMENT vers le JSP du formulaire pour que son contenu
-                // soit renvoyé comme réponse AJAX et injecté dans le corps de la modale.
+            }  else if ("showPdfForm".equals(action)) {
                 logger.info("Chargement du formulaire PDF pour la modale via AJAX.");
-                List<Client> clients = clientService.getAllClients(); // Le formulaire aura besoin des clients pour la liste déroulante
-                request.setAttribute("clients", clients);
+                // Récupère uniquement les clients qui ont effectué des envois
+                List<Client> clientsWithTransactions = clientService.getClientsWithTransactions();
+                request.setAttribute("clients", clientsWithTransactions);
                 request.getRequestDispatcher("/WEB-INF/views/envoyer/releve.jsp").forward(request, response);
             } else if ("pdf".equals(action)) {
                 // Gère la génération du fichier PDF et l'envoie au navigateur
@@ -151,14 +146,14 @@ public class EnvoyerServlet extends BaseServlet {
      * @throws IOException En cas d'erreur d'entrée/sortie
      */
     private void handleCreate(HttpServletRequest request, HttpServletResponse response) throws IOException {
-        String idEnv = generateId(); // Génère un ID unique pour l'envoi
+        String idEnv = generateId();
         String numEnvoyeur = request.getParameter("numEnvoyeur");
         String numRecepteur = request.getParameter("numRecepteur");
         String raison = request.getParameter("raison");
 
-        int montant = 0;
+        double montant = 0.0; // CHANGÉ: int -> double
         try {
-            montant = Integer.parseInt(request.getParameter("montant"));
+            montant = Double.parseDouble(request.getParameter("montant")); // CHANGÉ: Integer.parseInt -> Double.parseDouble
         } catch (NumberFormatException e) {
             sendJsonResponse(response, HttpServletResponse.SC_BAD_REQUEST, new ErrorResponse("Le montant doit être un nombre valide."));
             return;
@@ -181,7 +176,12 @@ public class EnvoyerServlet extends BaseServlet {
             sendJsonResponse(response, HttpServletResponse.SC_BAD_REQUEST, new ErrorResponse("L'expéditeur et le destinataire ne peuvent pas être les mêmes."));
             return;
         }
-        // Pas de validation de montant ici, présumé géré par service.createEnvoi() ou être non-négatif
+        // Validation des pays
+        if (envoyeur.getPays().equals(recepteur.getPays())) {
+            sendJsonResponse(response, HttpServletResponse.SC_BAD_REQUEST,
+                    new ErrorResponse("L'envoyeur et le récepteur doivent être de pays différents."));
+            return;
+        }
 
         Envoyer envoi = new Envoyer(idEnv, envoyeur, recepteur, montant, LocalDateTime.now(), raison);
 
@@ -207,7 +207,7 @@ public class EnvoyerServlet extends BaseServlet {
      * @throws IOException En cas d'erreur d'entrée/sortie
      */
     private void handleUpdate(HttpServletRequest request, HttpServletResponse response) throws IOException {
-        String idEnv = request.getParameter("idEnv"); // L'ID est nécessaire pour la mise à jour
+        String idEnv = request.getParameter("idEnv");
         String numEnvoyeur = request.getParameter("numEnvoyeur");
         String numRecepteur = request.getParameter("numRecepteur");
         String raison = request.getParameter("raison");
@@ -217,9 +217,9 @@ public class EnvoyerServlet extends BaseServlet {
             return;
         }
 
-        int montant = 0;
+        double montant = 0.0; // CHANGÉ: int -> double
         try {
-            montant = Integer.parseInt(request.getParameter("montant"));
+            montant = Double.parseDouble(request.getParameter("montant")); // CHANGÉ: Integer.parseInt -> Double.parseDouble
         } catch (NumberFormatException e) {
             sendJsonResponse(response, HttpServletResponse.SC_BAD_REQUEST, new ErrorResponse("Le montant doit être un nombre valide."));
             return;
@@ -247,7 +247,12 @@ public class EnvoyerServlet extends BaseServlet {
             sendJsonResponse(response, HttpServletResponse.SC_NOT_FOUND, new ErrorResponse("Envoi introuvable pour la mise à jour."));
             return;
         }
-
+        // Validation des pays
+        if (envoyeur.getPays().equals(recepteur.getPays())) {
+            sendJsonResponse(response, HttpServletResponse.SC_BAD_REQUEST,
+                    new ErrorResponse("L'envoyeur et le récepteur doivent être de pays différents."));
+            return;
+        }
         // Crée un nouvel objet Envoyer avec les données mises à jour (en conservant la date d'origine)
         Envoyer updatedEnvoi = new Envoyer(idEnv, envoyeur, recepteur, montant, existingEnvoi.getDate(), raison);
 
@@ -262,6 +267,7 @@ public class EnvoyerServlet extends BaseServlet {
             sendJsonResponse(response, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, new ErrorResponse("Erreur lors de la mise à jour de l'envoi : " + e.getMessage()));
         }
     }
+
 
     /**
      * Gère la suppression d'un envoi.
