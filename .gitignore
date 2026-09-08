@@ -36,3 +36,12 @@ build/
 
 ### Mac OS ###
 .DS_Store
+
+
+target/
+src/main/resources/META-INF/persistence.xml
+src/main/resources/email.properties
+.idea/
+*.iml
+.vscode/
+*.log
